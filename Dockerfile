@@ -52,12 +52,15 @@ RUN apt-get update --fix-missing && \
 
 WORKDIR /opt/bin
 
+SHELL ["/bin/bash", "-c"]
+
 # install micromamba
 RUN wget --quiet -O linux-64_micromamba-1.5.1-2.tar.bz2 https://micro.mamba.pm/api/micromamba/linux-64/latest && \
     tar -xvjf linux-64_micromamba-1.5.1-2.tar.bz2 && \
     mkdir -p /opt/micromamba/bin && \
     mv ./bin/micromamba /opt/micromamba/bin/micromamba && \
-    /opt/micromamba/bin/micromamba shell init -s bash -r /opt/micromamba && \
+    /opt/micromamba/bin/micromamba shell init --shell bash -r /opt/micromamba && \
+    source ~/.bashrc && \
     export MAMBA_ROOT_PREFIX=/opt/micromamba && \
     rm linux-64_micromamba-1.5.1-2.tar.bz2 && \
     rm -r info/ && \
@@ -75,8 +78,7 @@ RUN apt install curl zlib1g-dev libbz2-dev liblzma-dev libcurl4-openssl-dev -y &
 
 COPY . .
 
-RUN /bin/bash -c "micromamba activate clair-mosaic" && \
-    wget http://www.bio8.cs.hku.hk/clair-mosaic/tn_models/tn_models.tar.gz	-P /opt/tn_models && \
+RUN wget http://www.bio8.cs.hku.hk/clair-mosaic/tn_models/tn_models.tar.gz	-P /opt/tn_models && \
     wget http://www.bio8.cs.hku.hk/clair-mosaic/to_models/to_models.tar.gz	-P /opt/to_models && \
     wget http://www.bio8.cs.hku.hk/clair-mosaic/databases/databases.tar.gz -P /opt/databases && \
     mkdir -p /opt/micromamba/envs/clair-mosaic/bin/tn_models && \
