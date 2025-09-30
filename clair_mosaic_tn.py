@@ -47,6 +47,8 @@ data_preprocess_folder_tn = [
     "compare_vcf",
     "extract_pair_candidates",
     "create_pair_tensor_pileup",
+    "create_tensor",
+    "create_tensor_pileup",
     'select_hetero_snp_for_phasing',
     "gen_contaminated_bam",
     "merge_vcf",
