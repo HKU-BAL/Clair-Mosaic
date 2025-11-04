@@ -53,6 +53,7 @@ docker run -it \
   --platform ilmn \
   --output_dir ${OUTPUT_DIR} \
   --region chr20:47000000-47100000 \
+  --enable_baymgd_tagging \
   --enable_mosaicbase_tagging
 
 ### Output
@@ -76,6 +77,7 @@ docker run -it \
   --platform ilmn \
   --output_dir ${OUTPUT_DIR} \
   --region chr20:47000000-47100000 \
+  --enable_baymgd_tagging \
   --enable_mosaicbase_tagging
   
 ### Output
