@@ -47,6 +47,13 @@ major_contigs = {"chr" + str(a) for a in list(range(1, 23)) + ["X", "Y"]}.union(
     {str(a) for a in list(range(1, 23)) + ["X", "Y"]})
 
 
+def sort_key(item):
+    order_map = {value: index for index, value in enumerate(major_contigs_order)}
+    chr = order_map[item[0]]
+    pos = item[1]
+    return (chr, pos)
+
+
 def cal_metrics(tp, fp, fn):
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
@@ -124,7 +131,6 @@ def compare_vcf(args):
                                  keep_af=True,
                                  min_qual=args.min_qual,
                                  max_qual=args.max_qual,
-                                 naf_filter=args.naf_filter,
                                  discard_indel=False if benchmark_indel else True)
     input_vcf_reader.read_vcf()
     input_variant_dict = input_vcf_reader.variant_dict
@@ -137,35 +143,32 @@ def compare_vcf(args):
     input_out_of_strat_bed, truth_out_of_strat_bed = 0, 0
 
     discard_low_af = args.min_af is not None
-    no_normal_count, no_tumor_alt_count, low_tumor_count, high_normal_af, low_af_count = 0, 0, 0, 0, 0
+    no_tumor_alt_count, low_tumor_count, low_af_count = 0, 0, 0
     if discard_low_af:
         if args.low_af_path is None or not os.path.exists(args.low_af_path):
-            if args.normal_bam_fn is None or args.tumor_bam_fn is None or (not (os.path.exists(args.normal_bam_fn) and os.path.exists(args.tumor_bam_fn))):
-                sys.exit("[ERROR] Pls input --normal_bam_fn and --tumor_bam_fn for calculation")
+            if args.bam_fn is None or (not os.path.exists(args.bam_fn)):
+                sys.exit("[ERROR] Pls input --bam_fn for calculation")
             result_dict = cal_af(args, truth_variant_dict, input_variant_dict)
         else:
             result_dict = defaultdict()
             fp = open(args.low_af_path).readlines()
             fp = [item.rstrip().split(' ') for item in fp]
             for row in fp:
-                ctg, pos, normal_cov, tumor_cov, normal_alt, tumor_alt, *hap_info = row
-                result_dict[ctg, int(pos)] = ctg, pos, normal_cov, tumor_cov, normal_alt, tumor_alt, hap_info
+                ctg, pos, tumor_cov, tumor_alt, *hap_info = row
+                result_dict[ctg, int(pos)] = ctg, pos, tumor_cov, tumor_alt, hap_info
 
         for k, v in result_dict.items():
-            ctg_name, pos, normal_cov, tumor_cov, normal_alt, tumor_alt = v[:6]
+            ctg_name, pos, tumor_cov, tumor_alt = v[:4]
             key = int(pos) if args.ctg_name is not None else (ctg_name, int(pos))
-            if int(normal_cov) <= args.min_coverage:
-                low_af_truth.add(key)
-                no_normal_count += 1
-            elif int(tumor_alt) == 0 or int(tumor_cov) == 0:
+            if int(tumor_alt) == 0 or int(tumor_cov) == 0:
                 low_af_truth.add(key)
                 no_tumor_alt_count += 1
-            elif int(tumor_alt) / float(tumor_cov) <= args.min_af or int(tumor_alt) <= args.min_alt_coverage:
+            elif int(tumor_alt) / float(tumor_cov) < args.min_af or int(tumor_alt) <= args.min_alt_coverage:
                 low_tumor_count += 1
                 low_af_truth.add(key)
 
         for k in list(input_variant_dict.keys()):
-            if float(input_variant_dict[k].af) <= args.min_af:
+            if float(input_variant_dict[k].af) < args.min_af:
                 del input_variant_dict[k]
                 low_af_count += 1
 
@@ -176,12 +179,12 @@ def compare_vcf(args):
         phase_dict = defaultdict()
         if args.phase_output is not None:
             for item in open(args.phase_output).readlines():
-                ctg, pos, normal_cov, tumor_cov, normal_alt, tumor_alt, *hap_info = item.rstrip().split(' ')
-                phase_dict[ctg, int(pos)] = (ctg, pos, normal_cov, tumor_cov, normal_alt, tumor_alt, hap_info)
+                ctg, pos, tumor_cov, tumor_alt, *hap_info = item.rstrip().split(' ')
+                phase_dict[ctg, int(pos)] = (ctg, pos, tumor_cov, tumor_alt, hap_info)
         else:
             phase_dict = result_dict
         for item in phase_dict.values():
-            ctg, pos, normal_cov, tumor_cov, normal_alt, tumor_alt, hap_info = item
+            ctg, pos, tumor_cov, tumor_alt, hap_info = item
             hp0, hp1, hp2, all_hp0, all_hp1, all_hp2 = [int(i) for i in hap_info]
             key = int(pos) if args.ctg_name is not None else (ctg, int(pos))
             if key in input_variant_dict:
@@ -199,7 +202,8 @@ def compare_vcf(args):
 
         for k, v in input_variant_dict.items():
             columns = v.row_str.rstrip().split('\t')
-            phaseable = columns[7] == 'H'
+            # phaseable = columns[7] == 'H'
+            phaseable = 'H' in columns[7].split(';')
             if phaseable:
                 phasable_count += 1
             else:
@@ -255,7 +259,7 @@ def compare_vcf(args):
 
         if benchmark_indel:
             ref_base, alt_base = input_variant_dict[key].reference_bases, input_variant_dict[key].alternate_bases[0]
-            if len(ref_base) == 1 and len(alt_base) == 1:
+            if len(ref_base) == 1 and len(alt_base) == 1 or len(input_variant_dict[key].alternate_bases) > 1:
                 del input_variant_dict[key]
 
     for key in list(truth_variant_dict.keys()):
@@ -301,6 +305,7 @@ def compare_vcf(args):
     tp_set = set()
     fp_qual_dict = defaultdict(float)
     tp_qual_dict = defaultdict(float)
+    gt_mismatch_count = 0
     for key, vcf_infos in input_variant_dict.items():
         pos = key if args.ctg_name is not None else key[1]
         contig = args.ctg_name if args.ctg_name is not None else key[0]
@@ -354,6 +359,8 @@ def compare_vcf(args):
                 continue
 
             genotype_match = skip_genotyping or (truth_genotype == genotype)
+            if not genotype_match:
+                gt_mismatch_count += 1
             if truth_ref_base == ref_base and truth_alt_base == alt_base and genotype_match:
                 tp_snv = tp_snv + 1 if is_snv else tp_snv
                 tp_ins = tp_ins + 1 if is_ins else tp_ins
@@ -383,7 +390,8 @@ def compare_vcf(args):
                     fp_fn_set.add(key)
 
             truth_set.add(key)
-
+    if not skip_genotyping:
+        print('[INFO] Genotype mismatch count/Total fp_fn count: {}/{}'.format(gt_mismatch_count, len(fp_fn_set)))
     for key, vcf_infos in truth_variant_dict.items():
         pos = key if args.ctg_name is not None else key[1]
         contig = args.ctg_name if args.ctg_name is not None else key[0]
@@ -427,7 +435,6 @@ def compare_vcf(args):
     tp_indel = tp_ins + tp_del
     fp_indel = fp_ins + fp_del
     fn_indel = fn_ins + fn_del
-
     snv_pre, snv_rec, snv_f1 = cal_metrics(tp=tp_snv, fp=fp_snv, fn=fn_snv)
 
     print("\n")
@@ -475,60 +482,8 @@ def compare_vcf(args):
                     file=output_file)
 
     if args.roc_fn:
-        if args.caller is None:
-            fp_dict = dict([(key, float(input_variant_dict[key].qual)) for key in fp_set])
-            tp_dict = dict([(key, float(input_variant_dict[key].qual)) for key in tp_set])
-        elif args.caller.lower() == 'strelka2':
-            fp_dict = {}
-            for key in fp_set:
-                somaticEVC = input_variant_dict[key].row_str.split('\t')[7].split(';')[-1]
-                qual = float(somaticEVC.split('=')[1])
-                fp_dict[key] = qual
-            tp_dict = {}
-            for key in tp_set:
-                somaticEVC = input_variant_dict[key].row_str.split('\t')[7].split(';')[-1]
-                qual = float(somaticEVC.split('=')[1])
-                tp_dict[key] = qual
-
-        elif args.caller.lower() == 'mutect2':
-            fp_dict = {}
-            for key in fp_set:
-                TLOD = input_variant_dict[key].row_str.split('\t')[7].split(';')[-1]
-                qual = float(TLOD.split('=')[1])
-                fp_dict[key] = qual
-            tp_dict = {}
-            for key in tp_set:
-                TLOD = input_variant_dict[key].row_str.split('\t')[7].split(';')[-1]
-                qual = float(TLOD.split('=')[1])
-                tp_dict[key] = qual
-
-        elif args.caller.lower() == 'somaticsniper':
-            fp_dict = {}
-            for key in fp_set:
-                SSC = input_variant_dict[key].row_str.split('\t')[10].split(':')[-1]
-                qual = float(SSC)
-                fp_dict[key] = qual
-            tp_dict = {}
-            for key in tp_set:
-                SSC = input_variant_dict[key].row_str.split('\t')[10].split(':')[-1]
-                qual = float(SSC)
-                tp_dict[key] = qual
-
-        elif args.caller.lower() == 'varnet':
-            fp_dict = {}
-            for key in fp_set:
-                SCORE = input_variant_dict[key].row_str.split('\t')[7].split(';')[1]
-                qual = float(SCORE.split('=')[1])
-                fp_dict[key] = qual
-            tp_dict = {}
-            for key in tp_set:
-                SCORE = input_variant_dict[key].row_str.split('\t')[7].split(';')[1]
-                qual = float(SCORE.split('=')[1])
-                tp_dict[key] = qual
-
-        else:
-            fp_dict = dict([(key, float(input_variant_dict[key].qual)) for key in fp_set])
-            tp_dict = dict([(key, float(input_variant_dict[key].qual)) for key in tp_set])
+        fp_dict = dict([(key, float(input_variant_dict[key].qual)) for key in fp_set])
+        tp_dict = dict([(key, float(input_variant_dict[key].qual)) for key in tp_set])
 
         qual_list = sorted([float(qual) for qual in fp_dict.values()] + [qual for qual in tp_dict.values()],
                            reverse=True)
@@ -568,7 +523,8 @@ def compare_vcf(args):
         for vcf_type, variant_set in zip(candidate_types, variant_sets):
             vcf_fn = os.path.join(output_dir, '{}.vcf'.format(vcf_type))
             vcf_writer = VcfWriter(vcf_fn=vcf_fn, ctg_name=args.ctg_name, write_header=False)
-            for key in variant_set:
+            variant_list = sorted(variant_set, key=sort_key) if args.ctg_name is None else sorted(variant_set)
+            for key in variant_list:
                 if key in input_variant_dict:
                     vcf_infos = input_variant_dict[key]
                 elif key in truth_variant_dict:
@@ -618,11 +574,8 @@ def main():
     parser.add_argument('--truth_filter_tag', type=str_none, default=None,
                         help="Filter variants with tag from the truth VCF")
 
-    parser.add_argument('--tumor_bam_fn', type=str, default=None,
-                        help="Sorted tumor BAM file input")
-
-    parser.add_argument('--normal_bam_fn', type=str, default=None,
-                        help="Sorted normal BAM file input")
+    parser.add_argument('--bam_fn', type=str, default=None,
+                        help="Sorted BAM file input")
 
     parser.add_argument('--samtools', type=str, default="samtools",
                         help="Absolute path to the 'samtools', samtools version >= 1.10 is required. Default: %(default)s")
@@ -666,9 +619,6 @@ def main():
     parser.add_argument('--log_som', type=str, default=None,
                         help=SUPPRESS)
 
-    parser.add_argument('--caller', type=str, default=None,
-                        help=SUPPRESS)
-
     parser.add_argument('--output_best_f1_score', action='store_true',
                         help=SUPPRESS)
 
@@ -693,9 +643,6 @@ def main():
                         help=SUPPRESS)
 
     parser.add_argument('--max_qual', type=float, default=None,
-                        help=SUPPRESS)
-
-    parser.add_argument('--naf_filter', type=float, default=None,
                         help=SUPPRESS)
 
     parser.add_argument('--debug', action='store_true',
