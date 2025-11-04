@@ -27,7 +27,6 @@ vcf_header = dedent("""\
             ##INFO=<ID=RCU,Number=1,Type=Integer,Description="Count of C in reverse strand in the input BAM">
             ##INFO=<ID=RGU,Number=1,Type=Integer,Description="Count of G in reverse strand in the input BAM">
             ##INFO=<ID=RTU,Number=1,Type=Integer,Description="Count of T in reverse strand in the input BAM">
-            ##INFO=<ID=SB,Number=1,Type=Float,Description="The p-value of Fisher’s exact test on strand bias">
             ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
             ##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
             ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
