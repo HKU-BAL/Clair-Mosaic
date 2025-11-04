@@ -42,6 +42,19 @@ major_contigs_order = ["chr" + str(a) for a in list(range(1, 23)) + ["X", "Y"]] 
                                                                                    list(range(1, 23)) + ["X", "Y"]]
 Phred_Trans = (-10 * log(e, 10))
 
+
+def delete_lines_after(target_str, delimiter):
+    lines = target_str.split('\n')
+    index = 0
+    for i, line in enumerate(lines):
+        if delimiter in line:
+            index = i
+            break
+    processed_lines = lines[:index+1]
+    processed_str = '\n'.join(processed_lines) + '\n'
+    return processed_str
+
+
 def quality_score_from(probability, int_format=False, use_phred_qual=True):
     p = float(probability)
     if use_phred_qual:
@@ -49,7 +62,8 @@ def quality_score_from(probability, int_format=False, use_phred_qual=True):
     else:
         tmp = max(p, 0.0)
 
-    return str(int(round(tmp, 3))) if int_format else "%.3f" % float(round(tmp, 3))
+    return str(int(round(tmp, 4))) if int_format else "%.4f" % float(round(tmp, 4))
+
 
 def compress_index_vcf(input_vcf):
     # use bgzip to compress vcf -> vcf.gz
@@ -58,19 +72,21 @@ def compress_index_vcf(input_vcf):
     proc = subprocess.run('tabix -f -p vcf {}.gz'.format(input_vcf), shell=True, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE)
 
+
 def mark_low_qual(row, quality_score_for_pass):
-    if row == '' or "Germline" in row or "RefCall" in row:
+    if row == '' or "Germline" in row or "RefCall" in row or "LowQual" in row:
         return row
     columns = row.split('\t')
     qual = float(columns[5])
     if quality_score_for_pass and qual <= quality_score_for_pass:
         if "NonMosaic" in row:
-            columns[6] = "LowQual;NonSomatic"
+            columns[6] = "LowQual;NonMosaic"
             columns[5] = "0.0000"
         else:
             columns[6] = "LowQual"
 
     return '\t'.join(columns)
+
 
 def mark_high_normal_af(row, indel_max_af_in_normal):
     if row == '' or "PASS" not in row:
@@ -86,6 +102,7 @@ def mark_high_normal_af(row, indel_max_af_in_normal):
         columns[5] = '0.0000'
     return '\t'.join(columns)
 
+
 def update_GQ(columns):
     INFO = columns[8]
     FORMAT = columns[9].split(':')
@@ -93,6 +110,7 @@ def update_GQ(columns):
     FORMAT[gq_index] = str(int(float(columns[5]))) if float(columns[5]) > 0.0 else quality_score_from(FORMAT[gq_index], True)
     columns[9] = ':'.join(FORMAT)
     return columns
+
 
 def merge_vcf(args):
     compress_vcf = args.compress_vcf
@@ -108,6 +126,12 @@ def merge_vcf(args):
         cmdline = open(cmdline_file).read().rstrip()
 
     quality_score_for_pass = args.qual if args.qual is not None else param.qual_dict[platform]
+
+    pileup_vcf_reader = VcfReader(vcf_fn=args.pileup_vcf_fn,
+                                 keep_row_str=False,
+                                 filter_tag=None,
+                                 save_header=True)
+    pileup_vcf_reader.read_vcf()
 
     pileup_input_variant_dict = defaultdict(str)
     row_count = 0
@@ -184,11 +208,15 @@ def merge_vcf(args):
     contigs_order = major_contigs_order + list(contig_dict.keys())
     contigs_order_list = sorted(contig_dict.keys(), key=lambda x: contigs_order.index(x))
 
+    output_vcf_header = pileup_vcf_reader.header
+    last_format_line = '##FORMAT=<ID=NTU,Number=1,Type=Integer,Description="Count of T in the control BAM">'
+    output_vcf_header = delete_lines_after(output_vcf_header, last_format_line)
     output_vcf_writer = VcfWriter(vcf_fn=args.output_fn,
                                  ctg_name=','.join(list(contig_dict.keys())),
                                  ref_fn=args.ref_fn,
                                  sample_name=args.sample_name,
                                  cmdline=cmdline,
+                                 header=output_vcf_header,
                                  show_ref_calls=True)
 
     for contig in contigs_order_list:
