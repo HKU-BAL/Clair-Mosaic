@@ -1,3 +1,6 @@
+<div align="center">
+    <img src="images/Clair-Mosaic_icon.png" width="300" alt="Clair-Mosaic">
+</div>
 
 # Clair-Mosaic - a deep-learning method for long-read mosaic small variant calling
 
@@ -11,7 +14,9 @@ Email: lchen@cs.hku.hk, zxzheng@cs.hku.hk, rbluo@cs.hku.hk
 
 ## Introduction
 
-Clair-Mosaic is a mosaic variant caller supporting various usage scenarios with both paired samples and single sample as input, and primarily designed for ONT long-read. Clair-Mosaic also applies multiple post-processing strategies, including the usage of panel of normals (PoNs), mosaic variant database, and haplotype consistency checking, to distinguish true mosaic variants from germline variants and artifacts.
+Clair-Mosaic is a mosaic variant caller supporting various usage scenarios with both paired samples and single sample as input, and primarily designed for ONT long-read. Clair-Mosaic also applies multiple post-processing strategies, including the usage of germline resources, Bayesian mosaic-germline discriminator, mosaic variant database, and haplotype consistency checking, to distinguish true mosaic variants from germline variants and artifacts.
+
+A preprint describing Clair-Mosaic's designs and results is at [bioRxiv](https://www.biorxiv.org/content/10.1101/2025.10.31.685831v1).
 
 For germline variant calling using **DNA-seq** sample, please try [Clair3](https://github.com/HKU-BAL/Clair3). 
 
@@ -214,6 +219,8 @@ docker run -it hkubal/clair-mosaic:latest /opt/bin/run_clair_mosaic --help
   --parallel PARALLEL   Absolute path of parallel, parallel >= 20191122 is required.
   --disable_nonmosaic_tagging
                         Disable non-mosaic variants tagging using panel of normals (PoNs). Default: Enabled.
+  --enable_baymgd_tagging
+                        Enable BayMGD tagging using Bayesian mosaic-germline discriminator. Default: Disabled.
   --enable_mosaicbase_tagging
                         Enable mosaic variant database tagging using MosaicBase. Default: Disabled.
   --enable_post_filtering
