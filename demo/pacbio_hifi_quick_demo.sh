@@ -32,6 +32,7 @@ docker run -it \
   --platform hifi_revio \
   --output_dir ${OUTPUT_DIR} \
   --region chr20:47000000-47100000 \
+  --enable_baymgd_tagging \
   --enable_mosaicbase_tagging \
   --enable_post_filtering \
   --enable_indel_calling
@@ -55,6 +56,7 @@ docker run -it \
   --platform hifi_revio \
   --output_dir ${OUTPUT_DIR} \
   --region chr20:47000000-47100000 \
+  --enable_baymgd_tagging \
   --enable_mosaicbase_tagging \
   --enable_post_filtering \
   --enable_indel_calling
