@@ -51,12 +51,14 @@ def delete_lines_after(target_str, delimiter):
     processed_str = '\n'.join(processed_lines) + '\n'
     return processed_str
 
+
 def compress_index_vcf(input_vcf):
     # use bgzip to compress vcf -> vcf.gz
     # use tabix to index vcf.gz
     proc = subprocess.run('bgzip -f {}'.format(input_vcf), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     proc = subprocess.run('tabix -f -p vcf {}.gz'.format(input_vcf), shell=True, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE)
+
 
 def mark_low_qual(row, platform, quality_score_for_pass, quality_score_for_pass_phaseable, quality_score_for_pass_unphaseable):
     if row == '' or "RefCall" in row or "LowQual" in row:
@@ -170,7 +172,7 @@ def merge_vcf(args):
     for k, row in pileup_input_variant_dict.items():
         if k[0] not in contig_dict or k[1] not in contig_dict[k[0]]:
             columns = row.strip().split()
-            if columns[6] != "NonSomatic" and columns[6] != "RefCall":
+            if columns[6] != "NonMosaic" and columns[6] != "RefCall":
                 columns[5] = "0.0000"
             else:
                 columns[5] = columns[5]
@@ -189,7 +191,7 @@ def merge_vcf(args):
     contigs_order_list = sorted(contig_dict.keys(), key=lambda x: contigs_order.index(x))
 
     output_vcf_header = pileup_vcf_reader.header
-    last_format_line = '##FORMAT=<ID=TU,Number=1,Type=Integer,Description="Count of T in the tumor BAM">'
+    last_format_line = '##FORMAT=<ID=TU,Number=1,Type=Integer,Description="Count of T in the input BAM">'
     output_vcf_header = delete_lines_after(output_vcf_header, last_format_line)
     output_vcf_writer = VcfWriter(vcf_fn=args.output_fn,
                                  ctg_name=','.join(list(contig_dict.keys())),
