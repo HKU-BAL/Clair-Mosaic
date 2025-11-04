@@ -200,6 +200,7 @@ def mosaicbase_tag(args):
                     info_str_db = ""
                     info_str_db += mosaicbase_info_str
                     columns[7] = info_str_ori + ";" + "MosaicBase" + ";" + info_str_db
+                    columns[6] = 'PASS'
                 row_str = '\t'.join(columns)
                 output.write(row_str)
 
