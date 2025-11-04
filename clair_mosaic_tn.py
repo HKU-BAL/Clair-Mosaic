@@ -57,6 +57,7 @@ data_preprocess_folder_tn = [
     'cal_metrics_in_af_range',
     'concat_files',
     "nonsomatic_tagging",
+    "baymgd_tagging",
     "mosaicbase_tagging",
     "haplotype_filtering",
 ]
