@@ -42,14 +42,14 @@ random.seed(0)
 cov_suffix = ".cov.mosdepth.summary.txt"
 
 
-def get_coverage_from_bam(args, bam_fn, is_tumor=False, output_prefix=None):
+def get_coverage_from_bam(args, bam_fn, is_sample=False, output_prefix=None):
     ctg_name = args.ctg_name
     dry_run = args.dry_run
 
     mosdepth = args.mosdepth
     contig_option = "" if ctg_name is None else "-c {}".format(ctg_name)
 
-    prefix = 'tumor' if is_tumor else 'normal'
+    prefix = 'sample' if is_sample else 'control'
     if output_prefix is None:
         output_prefix = os.path.join(args.output_dir, 'tmp', 'raw_{}'.format(prefix))
 
@@ -86,69 +86,69 @@ def random_sample(population, k, seed=0):
 
 
 def gen_contaminated_bam(args):
-    tumor_bam_fn = args.tumor_bam_fn
-    normal_bam_fn = args.normal_bam_fn
+    sample_bam_fn = args.sample_bam_fn
+    control_bam_fn = args.control_bam_fn
     output_dir = args.output_dir
     ctg_name = args.ctg_name
     samtools_execute_command = args.samtools
     samtools_threads = args.samtools_threads
-    normal_purity = args.normal_purity
-    tumor_purity = args.tumor_purity
+    control_purity = args.control_purity
+    sample_purity = args.sample_purity
 
     if not os.path.exists(os.path.join(output_dir, "tmp")):
         rc = subprocess.run('mkdir -p {}/tmp'.format(output_dir), shell=True)
-    normal_bam_coverage = args.normal_bam_coverage if args.normal_bam_coverage else get_coverage_from_bam(args,
-                                                                                                          normal_bam_fn,
+    control_bam_coverage = args.control_bam_coverage if args.control_bam_coverage else get_coverage_from_bam(args,
+                                                                                                          control_bam_fn,
                                                                                                           False)
-    tumor_bam_coverage = args.tumor_bam_coverage if args.tumor_bam_coverage else get_coverage_from_bam(args,
-                                                                                                       tumor_bam_fn,
+    sample_bam_coverage = args.sample_bam_coverage if args.sample_bam_coverage else get_coverage_from_bam(args,
+                                                                                                       sample_bam_fn,
                                                                                                        True)
 
-    print("[INFO] Normal/Tumor BAM coverage: {}/{}".format(normal_bam_coverage,
-                                                           tumor_bam_coverage))
+    print("[INFO] Control/Sample BAM coverage: {}/{}".format(control_bam_coverage,
+                                                           sample_bam_coverage))
 
-    # add normal to normal
-    if normal_purity is not None:
-        contam_coverage = normal_bam_coverage * (1 - normal_purity)
-        rest_normal_coverage = normal_bam_coverage - contam_coverage
+    # add control to control
+    if control_purity is not None:
+        contam_coverage = control_bam_coverage * (1 - control_purity)
+        rest_control_coverage = control_bam_coverage - contam_coverage
 
         need_downsample = True
-        if contam_coverage >= float(tumor_bam_coverage):
-            print("[WARNING] Contam BAM coverage is higher than tumor BAM, use all tumor BAM!")
-            normal_subsample_pro = "1.00"
+        if contam_coverage >= float(sample_bam_coverage):
+            print("[WARNING] Contam BAM coverage is higher than sample BAM, use all sample BAM!")
+            control_subsample_pro = "1.00"
             need_downsample = False
-            tumor_subsample_bam = tumor_bam_fn
+            sample_subsample_bam = sample_bam_fn
         else:
-            normal_subsample_pro = "%.3f" % (rest_normal_coverage / float(normal_bam_coverage))
-            tumor_subsample_bam = os.path.join(args.output_dir, 'tmp', 'tumor_subsample.bam')
+            control_subsample_pro = "%.3f" % (rest_control_coverage / float(control_bam_coverage))
+            sample_subsample_bam = os.path.join(args.output_dir, 'tmp', 'sample_subsample.bam')
 
-        tumor_subsample_pro = "%.3f" % (contam_coverage / float(tumor_bam_coverage))
+        sample_subsample_pro = "%.3f" % (contam_coverage / float(sample_bam_coverage))
 
-        print("[INFO] Normal/Tumor subsample proportion: {}/{}".format(normal_subsample_pro,
-                                                                       tumor_subsample_pro))
+        print("[INFO] Control/Sample subsample proportion: {}/{}".format(control_subsample_pro,
+                                                                       sample_subsample_pro))
 
-        normal_subsample_bam = os.path.join(args.output_dir, 'tmp', 'normal_rest.bam')
+        control_subsample_bam = os.path.join(args.output_dir, 'tmp', 'control_rest.bam')
 
         contig_option = "" if ctg_name is None else ctg_name
 
-        # tumor subsample cmd
+        # sample subsample cmd
         t_s_cmd = "{} view -@{} -bh -s {} -o {} {} {}".format(samtools_execute_command,
                                                               samtools_threads,
-                                                              tumor_subsample_pro,
-                                                              tumor_subsample_bam,
-                                                              tumor_bam_fn,
+                                                              sample_subsample_pro,
+                                                              sample_subsample_bam,
+                                                              sample_bam_fn,
                                                               contig_option,
                                                               )
-        # normal subsample cmd
+        # control subsample cmd
         n_s_cmd = "{} view -@{} -bh -s {} -o {} {} {}".format(samtools_execute_command,
                                                               samtools_threads,
-                                                              normal_subsample_pro,
-                                                              normal_subsample_bam,
-                                                              normal_bam_fn,
+                                                              control_subsample_pro,
+                                                              control_subsample_bam,
+                                                              control_bam_fn,
                                                               contig_option)
 
-        n_index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, tumor_subsample_bam)
-        t_index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, normal_subsample_bam)
+        n_index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, sample_subsample_bam)
+        t_index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, control_subsample_bam)
 
         print('[INFO] Will run the following commands:')
         print(t_s_cmd)
@@ -163,12 +163,12 @@ def gen_contaminated_bam(args):
                 subprocess.run(t_s_cmd, shell=True)
                 subprocess.run(t_index_cmd, shell=True)
 
-        normal_output_bam = os.path.join(output_dir, "normal_purity_{}.bam".format(normal_purity))
+        control_output_bam = os.path.join(output_dir, "control_purity_{}.bam".format(control_purity))
 
-        print("[INFO] Merging tumor BAM into normal BAM as contamination...")
-        merge_cmd = "{} merge -f -@{} {} {} {}".format(samtools_execute_command, samtools_threads, normal_output_bam,
-                                                       tumor_subsample_bam, normal_subsample_bam)
-        index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, normal_output_bam)
+        print("[INFO] Merging sample BAM into control BAM as contamination...")
+        merge_cmd = "{} merge -f -@{} {} {} {}".format(samtools_execute_command, samtools_threads, control_output_bam,
+                                                       sample_subsample_bam, control_subsample_bam)
+        index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, control_output_bam)
 
         print('[INFO] Will run the following commands:')
         print(merge_cmd)
@@ -178,56 +178,56 @@ def gen_contaminated_bam(args):
             subprocess.run(index_cmd, shell=True)
 
         if args.cal_output_bam_coverage:
-            get_coverage_from_bam(args, normal_output_bam, False, os.path.join(args.output_dir, 'cov'))
+            get_coverage_from_bam(args, control_output_bam, False, os.path.join(args.output_dir, 'cov'))
 
         if args.remove_intermediate_dir:
             tmp_file_path = os.path.join(args.output_dir, 'tmp')
             if os.path.exist(tmp_file_path):
                 rc = subprocess.run("rm -rf {}".format(tmp_file_path), shell=True)
 
-        print("[INFO] Finishing merging, output file: {}".format(normal_output_bam))
+        print("[INFO] Finishing merging, output file: {}".format(control_output_bam))
 
-    # add normal to tumor
-    if tumor_purity is not None:
-        contam_coverage = tumor_bam_coverage * (1 - tumor_purity)
-        rest_tumor_coverage = tumor_bam_coverage - contam_coverage
+    # add control to sample
+    if sample_purity is not None:
+        contam_coverage = sample_bam_coverage * (1 - sample_purity)
+        rest_sample_coverage = sample_bam_coverage - contam_coverage
 
         need_downsample = True
-        if contam_coverage > float(normal_bam_coverage):
-            print("[WARNING] Contaim coverage is higher than normal, use all normal BAM!")
-            normal_subsample_pro = "1.00"
+        if contam_coverage > float(control_bam_coverage):
+            print("[WARNING] Contaim coverage is higher than control, use all control BAM!")
+            control_subsample_pro = "1.00"
             need_downsample = False
-            normal_subsample_bam = normal_bam_fn
+            control_subsample_bam = control_bam_fn
         else:
-            normal_subsample_pro = "%.3f" % (contam_coverage / float(normal_bam_coverage))
-            normal_subsample_bam = os.path.join(args.output_dir, 'tmp', 'normal_subsample.bam')
-        tumor_subsample_pro = "%.3f" % (rest_tumor_coverage / float(tumor_bam_coverage))
+            control_subsample_pro = "%.3f" % (contam_coverage / float(control_bam_coverage))
+            control_subsample_bam = os.path.join(args.output_dir, 'tmp', 'control_subsample.bam')
+        sample_subsample_pro = "%.3f" % (rest_sample_coverage / float(sample_bam_coverage))
 
-        print("[INFO] Normal/Tumor subsample proportion: {}/{}".format(normal_subsample_pro,
-                                                                       tumor_subsample_pro))
+        print("[INFO] Control/Sample subsample proportion: {}/{}".format(control_subsample_pro,
+                                                                       sample_subsample_pro))
 
-        tumor_subsample_bam = os.path.join(args.output_dir, 'tmp', 'tumor_rest.bam')
+        sample_subsample_bam = os.path.join(args.output_dir, 'tmp', 'sample_rest.bam')
 
         contig_option = "" if ctg_name is None else ctg_name
 
-        # tumor subsample cmd
+        # sample subsample cmd
         t_s_cmd = "{} view -@{} -bh -s {} -o {} {} {}".format(samtools_execute_command,
                                                               samtools_threads,
-                                                              tumor_subsample_pro,
-                                                              tumor_subsample_bam,
-                                                              tumor_bam_fn,
+                                                              sample_subsample_pro,
+                                                              sample_subsample_bam,
+                                                              sample_bam_fn,
                                                               contig_option,
                                                               )
-        # normal subsample cmd
+        # control subsample cmd
         n_s_cmd = "{} view -@{} -bh -s {} -o {} {} {}".format(samtools_execute_command,
                                                               samtools_threads,
-                                                              normal_subsample_pro,
-                                                              normal_subsample_bam,
-                                                              normal_bam_fn,
+                                                              control_subsample_pro,
+                                                              control_subsample_bam,
+                                                              control_bam_fn,
                                                               contig_option)
 
-        t_index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, tumor_subsample_bam)
-        n_index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, normal_subsample_bam)
+        t_index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, sample_subsample_bam)
+        n_index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, control_subsample_bam)
 
         print('[INFO] Will run the following commands:')
         print(t_s_cmd)
@@ -242,12 +242,12 @@ def gen_contaminated_bam(args):
                 subprocess.run(n_s_cmd, shell=True)
                 subprocess.run(n_index_cmd, shell=True)
 
-        tumor_output_bam = os.path.join(output_dir, "tumor_purity_{}.bam".format(tumor_purity))
+        sample_output_bam = os.path.join(output_dir, "sample_purity_{}.bam".format(sample_purity))
 
-        print("[INFO] Merging normal BAM into tumor BAM as contamination...")
-        merge_cmd = "{} merge -f -@{} {} {} {}".format(samtools_execute_command, samtools_threads, tumor_output_bam,
-                                                       tumor_subsample_bam, normal_subsample_bam)
-        index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, tumor_output_bam)
+        print("[INFO] Merging control BAM into sample BAM as contamination...")
+        merge_cmd = "{} merge -f -@{} {} {} {}".format(samtools_execute_command, samtools_threads, sample_output_bam,
+                                                       sample_subsample_bam, control_subsample_bam)
+        index_cmd = '{} index -@{} {}'.format(samtools_execute_command, samtools_threads, sample_output_bam)
 
         print('[INFO] Will run the following commands:')
         print(merge_cmd)
@@ -257,30 +257,30 @@ def gen_contaminated_bam(args):
             subprocess.run(index_cmd, shell=True)
 
         if args.cal_output_bam_coverage:
-            get_coverage_from_bam(args, tumor_output_bam, True, os.path.join(args.output_dir, 'cov'))
+            get_coverage_from_bam(args, sample_output_bam, True, os.path.join(args.output_dir, 'cov'))
 
         if args.remove_intermediate_dir:
             tmp_file_path = os.path.join(args.output_dir, 'tmp')
             if os.path.exist(tmp_file_path):
                 rc = subprocess.run("rm -rf {}".format(tmp_file_path), shell=True)
 
-        print("[INFO] Finishing merging, output file: {}".format(tumor_output_bam))
+        print("[INFO] Finishing merging, output file: {}".format(sample_output_bam))
 
 
 def main():
     parser = ArgumentParser(description="Generate contaminated BAM for benchmarking")
 
-    parser.add_argument('--normal_bam_fn', type=str, default=None,
-                        help="Sorted normal BAM file input")
+    parser.add_argument('--control_bam_fn', type=str, default=None,
+                        help="Sorted control BAM file input")
 
-    parser.add_argument('--tumor_bam_fn', type=str, default=None,
-                        help="Sorted tumor BAM file input")
+    parser.add_argument('--sample_bam_fn', type=str, default=None,
+                        help="Sorted sample BAM file input")
 
-    parser.add_argument('--normal_bam_coverage', type=float, default=None,
-                        help="Normal BAM coverage calculated using mosdepth")
+    parser.add_argument('--control_bam_coverage', type=float, default=None,
+                        help="Control BAM coverage calculated using mosdepth")
 
-    parser.add_argument('--tumor_bam_coverage', type=float, default=None,
-                        help="Tumor BAM coverage calculated using mosdepth")
+    parser.add_argument('--sample_bam_coverage', type=float, default=None,
+                        help="Sample BAM coverage calculated using mosdepth")
 
     parser.add_argument('--output_dir', type=str, default=None,
                         help="Sorted chunked BAM file output path")
@@ -291,11 +291,11 @@ def main():
     parser.add_argument('--samtools_threads', type=int, default=32,
                         help="Samtools threads to read input BAM")
 
-    parser.add_argument('--normal_purity', type=float, default=None,
-                        help="Normal purity")
+    parser.add_argument('--control_purity', type=float, default=None,
+                        help="Control purity")
 
-    parser.add_argument('--tumor_purity', type=float, default=None,
-                        help="Tumor purity")
+    parser.add_argument('--sample_purity', type=float, default=None,
+                        help="Sample purity")
 
     parser.add_argument('--ctg_name', type=str_none, default=None,
                         help="The name of sequence to be processed")
