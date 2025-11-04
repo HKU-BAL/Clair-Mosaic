@@ -18,6 +18,18 @@ LOW_AF_INDEL = 0.2
 flanking = 100
 
 
+def delete_lines_after(target_str, delimiter):
+    lines = target_str.split('\n')
+    index = 0
+    for i, line in enumerate(lines):
+        if delimiter in line:
+            index = i
+            break
+    processed_lines = lines[:index+1]
+    processed_str = '\n'.join(processed_lines) + '\n'
+    return processed_str
+
+
 def get_base_list(columns):
     pileup_bases = columns[4]
 
@@ -269,10 +281,16 @@ def postfilter(args):
         if not pass_bed_region:
             continue
         input_variant_dict[k] = v
+
+    output_vcf_header = input_vcf_reader.header
+    last_format_line = '##FORMAT=<ID=NTU,Number=1,Type=Integer,Description="Count of T in the control BAM">'
+    output_vcf_header = delete_lines_after(output_vcf_header, last_format_line)
     p_vcf_writer = VcfWriter(vcf_fn=pileup_output_vcf_fn,
                              ctg_name=ctg_name,
                              ref_fn=args.ref_fn,
+                             header=output_vcf_header,
                              show_ref_calls=True)
+
     if not is_indel:
         pf_info_output_path = os.path.join(output_dir, "PF_INFO_SNV")
     else:
