@@ -53,6 +53,7 @@ data_preprocess_folder_to = [
     "select_hetero_snp_for_phasing",
     "gen_contaminated_bam",
     "nonsomatic_tagging",
+    "baymgd_tagging",
     "mosaicbase_tagging",
     "haplotype_filtering",
 ]
