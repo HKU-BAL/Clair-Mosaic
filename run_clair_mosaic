@@ -856,6 +856,11 @@ def check_args_tn(args):
             default_1kgpon_resource) + ',' + str(default_colorsdb_resource)
         args.panel_of_normals_require_allele_matching = 'True' + ',' + 'True' + ',' + 'False' + ',' + 'False'
 
+    default_gnomad_directory = os.path.join(args.conda_prefix, 'bin', 'databases', 'gnomad.r2.1.af-ge-0.00001_chr')
+
+    if args.gnomad_dir is None:
+        args.gnomad_dir = str(default_gnomad_directory)
+
     default_mosaicbase_resource = os.path.join(args.conda_prefix, 'bin', 'databases', 'MosaicBase.GRCh38.simplified.vcf.gz')
     default_mosaicbase_resource = file_path_from(file_name=default_mosaicbase_resource, exit_on_not_found=True,
                                              is_directory=False, allow_none=True)
@@ -1130,6 +1135,11 @@ def check_args_to(args):
             default_1kgpon_resource) + ',' + str(default_colorsdb_resource)
         args.panel_of_normals_require_allele_matching = 'True' + ',' + 'True' + ',' + 'False' + ',' + 'False'
 
+    default_gnomad_directory = os.path.join(args.conda_prefix, 'bin', 'databases', 'gnomad.r2.1.af-ge-0.00001_chr')
+
+    if args.gnomad_dir is None:
+        args.gnomad_dir = str(default_gnomad_directory)
+
     default_mosaicbase_resource = os.path.join(args.conda_prefix, 'bin', 'databases', 'MosaicBase.GRCh38.simplified.vcf.gz')
     default_mosaicbase_resource = file_path_from(file_name=default_mosaicbase_resource, exit_on_not_found=True,
                                              is_directory=False, allow_none=True)
@@ -1290,6 +1300,7 @@ def print_args_tn(args):
     logging("[INFO] ENABLE INCLUDING ALL CTGS FOR CALLING: {}".format(args.include_all_ctgs))
     logging("[INFO] ENABLE REMOVING INTERMEDIATE FILES: {}".format(args.remove_intermediate_dir))
     logging("[INFO] ENABLE APPLYING NON-MOSAIC TAGGING: {}".format(not args.disable_nonmosaic_tagging))
+    logging("[INFO] ENABLE APPLYING BAYMGD TAGGING: {}".format(args.enable_baymgd_tagging))
     logging("[INFO] ENABLE APPLYING MOSAICBASE TAGGING: {}".format(args.enable_mosaicbase_tagging))
     logging("[INFO] ENABLE APPLYING POST FILTERING: {}".format(args.enable_post_filtering))
     logging("")
@@ -1346,6 +1357,7 @@ def print_args_to(args):
     logging("[INFO] ENABLE INDEL CALLING: {}".format(args.enable_indel_calling))
     logging("[INFO] ENABLE PRINTING REFERENCE CALLS: {}".format(args.print_ref_calls))
     logging("[INFO] ENABLE APPLYING NON-MOSAIC TAGGING: {}".format(not args.disable_nonmosaic_tagging))
+    logging("[INFO] ENABLE APPLYING BAYMGD TAGGING: {}".format(args.enable_baymgd_tagging))
     logging("[INFO] ENABLE APPLYING MOSAICBASE TAGGING: {}".format(args.enable_mosaicbase_tagging))
     logging("[INFO] ENABLE APPLYING POST FILTERING: {}".format(args.enable_post_filtering))
     logging("")
@@ -1432,6 +1444,7 @@ def print_command_line_tn(args):
         cmdline += '--skip_steps {} '.format(args.skip_steps) if args.skip_steps is not None else ""
         cmdline += '--conda_prefix {} '.format(args.conda_prefix) if args.conda_prefix is not None else ""
         cmdline += '--disable_nonmosaic_tagging ' if args.disable_nonmosaic_tagging else ""
+        cmdline += '--enable_baymgd_tagging ' if args.enable_baymgd_tagging else ""
         cmdline += '--enable_mosaicbase_tagging ' if args.enable_mosaicbase_tagging else ""
         cmdline += '--enable_post_filtering ' if args.enable_post_filtering else ""
         args.cmdline = cmdline
@@ -1496,6 +1509,7 @@ def print_command_line_to(args):
         cmdline += '--enable_indel_calling ' if args.enable_indel_calling else ""
         cmdline += '--print_ref_calls ' if args.print_ref_calls else ""
         cmdline += '--disable_nonmosaic_tagging ' if args.disable_nonmosaic_tagging else ""
+        cmdline += '--enable_baymgd_tagging ' if args.enable_baymgd_tagging else ""
         cmdline += '--enable_mosaicbase_tagging ' if args.enable_mosaicbase_tagging else ""
         cmdline += '--enable_post_filtering ' if args.enable_post_filtering else ""
         args.cmdline = cmdline
@@ -1837,6 +1851,42 @@ def mosaic_calling_tn(args):
                                             args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf')
         commands_list += [nst_command]
 
+    if args.enable_baymgd_tagging:
+        # SNV BAYMGD TAGGING
+        echo_list.append("[INFO] BayMGD Tagging for SNV Variants")
+        bt_command = '( ' + time + args.parallel
+        bt_command += ' --joblog ' + args.output_dir + '/logs/parallel_baymgd_tagging_snv.log'
+        bt_command += ' -j ' + str(args.threads)
+        bt_command += ' ' + args.python + ' ' + main_entry + ' baymgd_tagging'
+        bt_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf'
+        bt_command += ' --output_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging_{1}.vcf'
+        bt_command += ' --ctg_name {1} '
+        bt_command += ' --pypy3 ' + args.pypy
+        bt_command += ' --parallel ' + args.parallel
+        bt_command += ' --show_ref ' if args.print_ref_calls else ''
+        bt_command += ' --show_germline ' if args.print_germline_calls else ''
+        bt_command += ' --disable_print_nonmosaic_calls ' if args.disable_print_nonmosaic_calls else ''
+        bt_command += ' --gnomad_dir {} '.format(args.gnomad_dir) if args.gnomad_dir is not None else ''
+        bt_command += ' :::: ' + args.output_dir + '/tmp/CONTIGS'
+        bt_command += ' ) 2>&1 | tee ' + args.output_dir + '/logs/BAYMGD_TAG_SNV.log'
+        commands_list += [bt_command]
+
+        # MERGE SNV BAYMGD TAGGING VCFs
+        echo_list.append("[INFO] Merge SNV BayMGD Tagging VCFs")
+        p_mv_command = args.pypy + ' ' + main_entry + ' sort_vcf'
+        p_mv_command += ' --ref_fn ' + args.ref_fn
+        p_mv_command += ' --contigs_fn ' + os.path.join(args.output_dir, 'tmp', 'CONTIGS')
+        p_mv_command += ' --input_dir ' + args.output_dir + '/tmp/vcf_output'
+        p_mv_command += ' --vcf_fn_prefix ' + 'snv_pileup_baymgd_tagging_'
+        p_mv_command += ' --output_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging.vcf'
+        commands_list += [p_mv_command]
+    else:
+        # SNV BAYMGD TAGGING
+        echo_list.append("[INFO] BayMGD Tagging for SNV Variants")
+        bt_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf',
+                                            args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging.vcf')
+        commands_list += [bt_command]
+
     if args.enable_mosaicbase_tagging:
         # SNV MOSAICBASE TAGGING
         echo_list.append("[INFO] MosaicBase Tagging for SNV Variants")
@@ -1844,7 +1894,7 @@ def mosaic_calling_tn(args):
         mt_command += ' --joblog ' + args.output_dir + '/logs/parallel_mosaicbase_tagging_snv.log'
         mt_command += ' -j ' + str(args.threads)
         mt_command += ' ' + args.pypy + ' ' + main_entry + ' mosaicbase_tagging'
-        mt_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf'
+        mt_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging.vcf'
         mt_command += ' --output_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_mosaicbase_tagging_{1}.vcf'
         mt_command += ' --ctg_name {1} '
         mt_command += ' --pypy3 ' + args.pypy
@@ -1869,9 +1919,9 @@ def mosaic_calling_tn(args):
     else:
         # SNV MOSAICBASE TAGGING
         echo_list.append("[INFO] MosaicBase Tagging for SNV Variants")
-        nst_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf',
+        mt_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging.vcf',
                                             args.output_dir + '/tmp/vcf_output/snv_pileup_mosaicbase_tagging.vcf')
-        commands_list += [nst_command]
+        commands_list += [mt_command]
 
     input_bam_prefix = clair3_output_path + '/phased_output/input_' if args.phase_input else args.bam_fn
 
@@ -2018,6 +2068,43 @@ def mosaic_calling_tn(args):
                                                       args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf')
             commands_list += [indel_nst_command]
 
+        if args.enable_baymgd_tagging:
+            # INDEL BAYMGD TAGGING
+            echo_list.append("[INFO] BayMGD Tagging for Indel Variants")
+            indel_bt_command = '( ' + time + args.parallel
+            indel_bt_command += ' --joblog ' + args.output_dir + '/logs/parallel_baymgd_tagging_indel.log'
+            indel_bt_command += ' -j ' + str(args.threads)
+            indel_bt_command += ' ' + args.python + ' ' + main_entry + ' baymgd_tagging'
+            indel_bt_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf'
+            indel_bt_command += ' --output_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging_{1}.vcf'
+            indel_bt_command += ' --ctg_name {1} '
+            indel_bt_command += ' --pypy3 ' + args.pypy
+            indel_bt_command += ' --parallel ' + args.parallel
+            indel_bt_command += ' --show_ref ' if args.print_ref_calls else ''
+            indel_bt_command += ' --show_germline ' if args.print_germline_calls else ''
+            indel_bt_command += ' --disable_print_nonmosaic_calls ' if args.disable_print_nonmosaic_calls else ''
+            indel_bt_command += ' --gnomad_dir {} '.format(args.gnomad_dir) if args.gnomad_dir is not None else ''
+            indel_bt_command += ' --is_indel '
+            indel_bt_command += ' :::: ' + args.output_dir + '/tmp/CONTIGS'
+            indel_bt_command += ' ) 2>&1 | tee ' + args.output_dir + '/logs/BAYMGD_TAG_INDEL.log'
+            commands_list += [indel_bt_command]
+
+            # MERGE INDEL BAYMGD TAGGING VCFs
+            echo_list.append("[INFO] Merge Indel BayMGD Tagging VCFs")
+            indel_p_mv_command = args.pypy + ' ' + main_entry + ' sort_vcf'
+            indel_p_mv_command += ' --ref_fn ' + args.ref_fn
+            indel_p_mv_command += ' --contigs_fn ' + os.path.join(args.output_dir, 'tmp', 'CONTIGS')
+            indel_p_mv_command += ' --input_dir ' + args.output_dir + '/tmp/vcf_output'
+            indel_p_mv_command += ' --vcf_fn_prefix ' + 'indel_pileup_baymgd_tagging_'
+            indel_p_mv_command += ' --output_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging.vcf'
+            commands_list += [indel_p_mv_command]
+        else:
+            # INDEL BAYMGD TAGGING
+            echo_list.append("[INFO] BayMGD Tagging for Indel Variants")
+            indel_bt_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf',
+                                               args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging.vcf')
+            commands_list += [indel_bt_command]
+
         if args.enable_post_filtering and args.platform != 'ilmn':
             # POST FILTERING for INDEL Variants
             echo_list.append("[INFO] Post Filtering for Indel Variants")
@@ -2025,7 +2112,7 @@ def mosaic_calling_tn(args):
             indel_hap_g_command += ' --tumor_bam_fn ' + input_bam_prefix
             indel_hap_g_command += ' --ref_fn ' + args.ref_fn
             indel_hap_g_command += ' --germline_vcf_fn ' + clair3_output_path + '/clair3_tumor_output/merge_output.vcf.gz'
-            indel_hap_g_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf'
+            indel_hap_g_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging.vcf'
             indel_hap_g_command += ' --output_dir ' + args.output_dir + '/tmp/vcf_output'
             indel_hap_g_command += ' --cmrg_bed_fn {}'.format(args.cmrg_bed_fn) if args.cmrg_bed_fn is not None else ''
             indel_hap_g_command += ' --samtools ' + args.samtools
@@ -2041,7 +2128,7 @@ def mosaic_calling_tn(args):
         else:
             # POST FILTERING for INDEL Variants
             echo_list.append("[INFO] Post Filtering for Indel Variants")
-            indel_pf_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf',
+            indel_pf_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging.vcf',
                                                args.output_dir + '/tmp/vcf_output/indel_pileup_filtering.vcf')
             commands_list += [indel_pf_command]
 
@@ -2073,25 +2160,34 @@ def mosaic_calling_tn(args):
             indel_genotyping_command += ' 2>&1 | tee ' + args.output_dir + '/logs/6_GTI.log'
             commands_list += [indel_genotyping_command]
 
-    # excute commands step by step
+    def run_command_with_parallel_check(command, step_num, stdout=None):
+        try:
+            if "parallel" in command.lower():
+                result = subprocess.run(command, shell=True, check=False, stdout=stdout)
+                if result.returncode != 0:
+                    sys.stderr.write(f"ERROR in STEP {step_num}, PARALLEL COMMAND FAILED WITH CODE {result.returncode}: {command}\n")
+                    sys.exit(1)
+                return result.returncode
+            else:
+                return subprocess.check_call(command, shell=True, stdout=stdout)
+        except subprocess.CalledProcessError as e:
+            sys.stderr.write(f"ERROR in STEP {step_num}, COMMAND FAILED: {command}\n")
+            sys.exit(1)
+
+    # EXECUTE COMMANDS STEP BY STEP
     skip_steps = args.skip_steps.rstrip().split(',') if args.skip_steps else None
     stdout = sys.stdout if args.tee is None else args.tee.stdin
     for i, (command, echo) in enumerate(zip(commands_list, echo_list)):
-
         logging(echo)
         logging("[INFO] RUN THE FOLLOWING COMMAND:")
         logging(command)
         logging("")
         if not args.dry_run:
-            if skip_steps is not None and str(i+1) in skip_steps:
-                logging("[INFO] --skip_steps is enabled, skip running step {}.".format(i+1))
+            if skip_steps is not None and str(i + 1) in skip_steps:
+                logging("[INFO] --skip_steps is enabled, skip running step {}.".format(i + 1))
                 logging("")
                 continue
-            try:
-                return_code = subprocess.check_call(command, shell=True, stdout=stdout)
-            except subprocess.CalledProcessError as e:
-                sys.stderr.write("ERROR in STEP {}, THE FOLLOWING COMMAND FAILED: {}\n".format(i+1, command))
-                exit(1)
+            return_code = run_command_with_parallel_check(command, i + 1, stdout=stdout)
         logging("")
 
     if args.remove_intermediate_dir:
@@ -2256,6 +2352,41 @@ def mosaic_calling_to(args):
                                             args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf')
         commands_list += [nst_command]
 
+    if args.enable_baymgd_tagging:
+        # SNV BAYMGD TAGGING
+        echo_list.append("[INFO] BayMGD Tagging for SNV Variants")
+        bt_command = '( ' + time + args.parallel
+        bt_command += ' --joblog ' + args.output_dir + '/logs/parallel_baymgd_tagging_snv.log'
+        bt_command += ' -j ' + str(args.threads)
+        bt_command += ' ' + args.python + ' ' + main_entry + ' baymgd_tagging'
+        bt_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf'
+        bt_command += ' --output_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging_{1}.vcf'
+        bt_command += ' --ctg_name {1} '
+        bt_command += ' --pypy3 ' + args.pypy
+        bt_command += ' --parallel ' + args.parallel
+        bt_command += ' --show_ref ' if args.print_ref_calls else ''
+        bt_command += ' --disable_print_nonmosaic_calls ' if args.disable_print_nonmosaic_calls else ''
+        bt_command += ' --gnomad_dir {} '.format(args.gnomad_dir) if args.gnomad_dir is not None else ''
+        bt_command += ' :::: ' + args.output_dir + '/tmp/CONTIGS'
+        bt_command += ' ) 2>&1 | tee ' + args.output_dir + '/logs/BAYMGD_TAG_SNV.log'
+        commands_list += [bt_command]
+
+        # MERGE SNV BAYMGD TAGGING VCFs
+        echo_list.append("[INFO] Merge SNV BayMGD Tagging VCFs")
+        p_mv_command = args.pypy + ' ' + main_entry + ' sort_vcf'
+        p_mv_command += ' --ref_fn ' + args.ref_fn
+        p_mv_command += ' --contigs_fn ' + os.path.join(args.output_dir, 'tmp', 'CONTIGS')
+        p_mv_command += ' --input_dir ' + args.output_dir + '/tmp/vcf_output'
+        p_mv_command += ' --vcf_fn_prefix ' + 'snv_pileup_baymgd_tagging_'
+        p_mv_command += ' --output_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging.vcf'
+        commands_list += [p_mv_command]
+    else:
+        # SNV BAYMGD TAGGING
+        echo_list.append("[INFO] BayMGD Tagging for SNV Variants")
+        bt_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf',
+                                            args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging.vcf')
+        commands_list += [bt_command]
+
     if args.enable_mosaicbase_tagging:
         # SNV MOSAICBASE TAGGING
         echo_list.append("[INFO] MosaicBase Tagging for SNV Variants")
@@ -2263,7 +2394,7 @@ def mosaic_calling_to(args):
         mt_command += ' --joblog ' + args.output_dir + '/logs/parallel_mosaicbase_tagging_snv.log'
         mt_command += ' -j ' + str(args.threads)
         mt_command += ' ' + args.pypy + ' ' + main_entry + ' mosaicbase_tagging'
-        mt_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf'
+        mt_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging.vcf'
         mt_command += ' --output_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup_mosaicbase_tagging_{1}.vcf'
         mt_command += ' --ctg_name {1} '
         mt_command += ' --pypy3 ' + args.pypy
@@ -2287,9 +2418,9 @@ def mosaic_calling_to(args):
     else:
         # SNV MOSAICBASE TAGGING
         echo_list.append("[INFO] MosaicBase Tagging for SNV Variants")
-        nst_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/snv_pileup_nonmosaic_tagging.vcf',
+        mt_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/snv_pileup_baymgd_tagging.vcf',
                                             args.output_dir + '/tmp/vcf_output/snv_pileup_mosaicbase_tagging.vcf')
-        commands_list += [nst_command]
+        commands_list += [mt_command]
 
     if args.platform != 'ilmn' and args.phase_input:
         echo_list.append("[INFO] Select Heterozygous SNP for Phasing")
@@ -2535,9 +2666,45 @@ def mosaic_calling_to(args):
         else:
             # INDEL NON-MOSAIC TAGGING
             echo_list.append("[INFO] Non-mosaic Tagging for SNV Variants")
-            indel_nst_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/indel_pileup.vcf',
+            indel_mt_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/indel_pileup.vcf',
                                                       args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf')
-            commands_list += [indel_nst_command]
+            commands_list += [indel_mt_command]
+
+        if args.enable_baymgd_tagging:
+            # INDEL BAYMGD TAGGING
+            echo_list.append("[INFO] BayMGD Tagging for Indel Variants")
+            indel_bt_command = '( ' + time + args.parallel
+            indel_bt_command += ' --joblog ' + args.output_dir + '/logs/parallel_baymgd_tagging_indel.log'
+            indel_bt_command += ' -j ' + str(args.threads)
+            indel_bt_command += ' ' + args.python + ' ' + main_entry + ' baymgd_tagging'
+            indel_bt_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf'
+            indel_bt_command += ' --output_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging_{1}.vcf'
+            indel_bt_command += ' --ctg_name {1} '
+            indel_bt_command += ' --pypy3 ' + args.pypy
+            indel_bt_command += ' --parallel ' + args.parallel
+            indel_bt_command += ' --show_ref ' if args.print_ref_calls else ''
+            indel_bt_command += ' --disable_print_nonmosaic_calls ' if args.disable_print_nonmosaic_calls else ''
+            indel_bt_command += ' --gnomad_dir {} '.format(args.gnomad_dir) if args.gnomad_dir is not None else ''
+            indel_bt_command += ' --is_indel '
+            indel_bt_command += ' :::: ' + args.output_dir + '/tmp/CONTIGS'
+            indel_bt_command += ' ) 2>&1 | tee ' + args.output_dir + '/logs/BAYMGD_TAG_INDEL.log'
+            commands_list += [indel_bt_command]
+
+            # MERGE INDEL BAYMGD TAGGING VCFs
+            echo_list.append("[INFO] Merge Indel BayMGD Tagging VCFs")
+            indel_p_mv_command = args.pypy + ' ' + main_entry + ' sort_vcf'
+            indel_p_mv_command += ' --ref_fn ' + args.ref_fn
+            indel_p_mv_command += ' --contigs_fn ' + os.path.join(args.output_dir, 'tmp', 'CONTIGS')
+            indel_p_mv_command += ' --input_dir ' + args.output_dir + '/tmp/vcf_output'
+            indel_p_mv_command += ' --vcf_fn_prefix ' + 'indel_pileup_baymgd_tagging_'
+            indel_p_mv_command += ' --output_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging.vcf'
+            commands_list += [indel_p_mv_command]
+        else:
+            # INDEL BAYMGD TAGGING
+            echo_list.append("[INFO] BayMGD Tagging for Indel Variants")
+            indel_bt_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf',
+                                               args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging.vcf')
+            commands_list += [indel_bt_command]
 
         if args.enable_post_filtering and args.platform != 'ilmn':
             # POST FILTERING for INDEL Variants
@@ -2546,7 +2713,7 @@ def mosaic_calling_to(args):
             indel_hap_g_command += ' --tumor_bam_fn ' + input_bam_prefix
             indel_hap_g_command += ' --ref_fn ' + args.ref_fn
             indel_hap_g_command += ' --germline_vcf_fn ' + args.output_dir + '/tmp/vcf_output/snv_pileup.vcf'
-            indel_hap_g_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf'
+            indel_hap_g_command += ' --pileup_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging.vcf'
             indel_hap_g_command += ' --output_dir ' + args.output_dir + '/tmp/vcf_output'
             indel_hap_g_command += ' --output_vcf_fn ' + args.output_dir + '/tmp/vcf_output/indel_pileup_filtering.vcf'
             indel_hap_g_command += ' --cmrg_bed_fn {}'.format(args.cmrg_bed_fn) if args.cmrg_bed_fn is not None else ''
@@ -2563,7 +2730,7 @@ def mosaic_calling_to(args):
         else:
             # POST FILTERING for INDEL Variants
             echo_list.append("[INFO] Post Filtering for Indel Variants")
-            indel_pf_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/indel_pileup_nonmosaic_tagging.vcf',
+            indel_pf_command = "ln -sf {} {}".format(args.output_dir + '/tmp/vcf_output/indel_pileup_baymgd_tagging.vcf',
                                                args.output_dir + '/tmp/vcf_output/indel_pileup_filtering.vcf')
             commands_list += [indel_pf_command]
 
@@ -2596,6 +2763,20 @@ def mosaic_calling_to(args):
             indel_genotyping_command += ' 2>&1 | tee ' + args.output_dir + '/logs/6_GT_INDEL.log'
             commands_list += [indel_genotyping_command]
 
+    def run_command_with_parallel_check(command, step_num, stdout=None):
+        try:
+            if "parallel" in command.lower():
+                result = subprocess.run(command, shell=True, check=False, stdout=stdout)
+                if result.returncode != 0:
+                    sys.stderr.write(f"ERROR in STEP {step_num}, PARALLEL COMMAND FAILED WITH CODE {result.returncode}: {command}\n")
+                    sys.exit(1)
+                return result.returncode
+            else:
+                return subprocess.check_call(command, shell=True, stdout=stdout)
+        except subprocess.CalledProcessError as e:
+            sys.stderr.write(f"ERROR in STEP {step_num}, COMMAND FAILED: {command}\n")
+            sys.exit(1)
+
     # EXECUTE COMMANDS STEP BY STEP
     skip_steps = args.skip_steps.rstrip().split(',') if args.skip_steps else None
     stdout = sys.stdout if args.tee is None else args.tee.stdin
@@ -2609,11 +2790,7 @@ def mosaic_calling_to(args):
                 logging("[INFO] --skip_steps is enabled, skip running step {}.".format(i + 1))
                 logging("")
                 continue
-            try:
-                return_code = subprocess.check_call(command, shell=True, stdout=stdout)
-            except subprocess.CalledProcessError as e:
-                sys.stderr.write("ERROR in STEP {}, THE FOLLOWING COMMAND FAILED: {}\n".format(i + 1, command))
-                exit(1)
+            return_code = run_command_with_parallel_check(command, i + 1, stdout=stdout)
         logging("")
 
     if args.remove_intermediate_dir:
@@ -2898,6 +3075,19 @@ def mosaic_parser_tn():
         "--disable_nonmosaic_tagging",
         action='store_true',
         help="Disable non-mosaic variants tagging using panel of normals (PoNs). Default: Enabled."
+    )
+
+    optional_params.add_argument(
+        "--gnomad_dir",
+        type=str,
+        default=None,
+        help="The path of the gnomAD population database used for BayMGD tagging."
+    )
+
+    optional_params.add_argument(
+        "--enable_baymgd_tagging",
+        action='store_true',
+        help="Enable BayMGD tagging. Default: Disabled."
     )
 
     optional_params.add_argument(
@@ -3476,6 +3666,19 @@ def mosaic_parser_to():
         "--disable_nonmosaic_tagging",
         action='store_true',
         help="Disable non-mosaic variants tagging using panel of normals (PoNs). Default: Enabled."
+    )
+
+    optional_params.add_argument(
+        "--gnomad_dir",
+        type=str,
+        default=None,
+        help="The path of the gnomAD population database used for BayMGD tagging."
+    )
+
+    optional_params.add_argument(
+        "--enable_baymgd_tagging",
+        action='store_true',
+        help="Enable BayMGD tagging. Default: Disabled."
     )
 
     optional_params.add_argument(
