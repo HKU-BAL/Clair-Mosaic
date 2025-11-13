@@ -43,6 +43,8 @@ For somatic variant calling using **tumor-only** sample, please try [ClairS-TO](
 
 ## Latest Updates
 
+*v0.1.0 (Nov. 13, 2025)*: Fixed a bug where the `--snv_min_af` and `--indel_min_af` parameters did not work properly.
+
 *v0.0.1 (Sep. 30, 2025)*: Initial release for early access.
 
 ------
