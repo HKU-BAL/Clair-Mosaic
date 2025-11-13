@@ -118,8 +118,7 @@ def merge_vcf(args):
     use_phred_qual = args.use_phred_qual
     cmdline_file = args.cmdline
     prefer_recall = args.prefer_recall
-    af_cut_off_min = args.af if args.af is not None else param.af_dict_min[platform]
-    af_cut_off_max = args.af if args.af is not None else param.af_dict_max[platform]
+    af_cut_off = args.af if args.af is not None else param.af_dict[platform]
 
     cmdline = None
     if cmdline_file is not None and os.path.exists(cmdline_file):
@@ -161,19 +160,11 @@ def merge_vcf(args):
             contig_dict[ctg_name][int(pos)] = row
             recall_count += 1
 
-        if af_cut_off_min is not None:
+        if af_cut_off is not None:
             tag_list = columns[8].split(':')
             taf_index = tag_list.index('AF') if 'AF' in tag_list else tag_list.index('VAF')
             af = float(columns[9].split(':')[taf_index])
-            if af < af_cut_off_min:
-                af_filter_count += 1
-                continue
-
-        if af_cut_off_max is not None:
-            tag_list = columns[8].split(':')
-            taf_index = tag_list.index('AF') if 'AF' in tag_list else tag_list.index('VAF')
-            af = float(columns[9].split(':')[taf_index])
-            if af > af_cut_off_max:
+            if af < af_cut_off:
                 af_filter_count += 1
                 continue
 
