@@ -1,6 +1,6 @@
 # parameters
 caller_name = "clair_mosaic"
-version = "0.0.1"
+version = "0.1.0"
 
 from itertools import accumulate
 
