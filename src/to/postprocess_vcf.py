@@ -104,8 +104,7 @@ def merge_vcf(args):
     quality_score_for_pass = args.qual if args.qual is not None else param.min_thred_qual[platform]
     quality_score_for_pass_phaseable = args.qual_cutoff_phaseable_region if args.qual_cutoff_phaseable_region is not None else param.min_phaseable_thred_qual[platform]
     quality_score_for_pass_unphaseable = args.qual_cutoff_unphaseable_region if args.qual_cutoff_unphaseable_region is not None else param.min_unphaseable_thred_qual[platform]
-    af_cut_off_min = args.af if args.af is not None else param.af_dict_min[platform]
-    af_cut_off_max = args.af if args.af is not None else param.af_dict_max[platform]
+    af_cut_off = args.af if args.af is not None else param.af_dict[platform]
 
     pileup_vcf_reader = VcfReader(vcf_fn=args.pileup_vcf_fn,
                          keep_row_str=False,
@@ -144,19 +143,11 @@ def merge_vcf(args):
                 row = '\t'.join(columns) + '\n'
                 contig_dict[ctg_name][int(pos)] = row
 
-        if af_cut_off_min is not None:
+        if af_cut_off is not None:
             tag_list = columns[8].split(':')
             taf_index = tag_list.index('AF') if 'AF' in tag_list else tag_list.index('VAF')
             af = float(columns[9].split(':')[taf_index])
-            if af < af_cut_off_min:
-                af_filter_count += 1
-                continue
-
-        if af_cut_off_max is not None:
-            tag_list = columns[8].split(':')
-            taf_index = tag_list.index('AF') if 'AF' in tag_list else tag_list.index('VAF')
-            af = float(columns[9].split(':')[taf_index])
-            if af > af_cut_off_max:
+            if af < af_cut_off:
                 af_filter_count += 1
                 continue
 
